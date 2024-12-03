@@ -649,11 +649,12 @@ describe("CompanyLotteries", function () {
       // Take a snapshot of the blockchain state
       snapshotId = await ethers.provider.send('evm_snapshot', []);
 
-      // Common lottery setup
-      unixbeg = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-      nooftickets = 100;
-      noofwinners = 10;
-      minpercentage = 50;
+      const currentTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
+
+      unixbeg = currentTimestamp + 3600; // 1 hour from the current block timestamp
+      nooftickets = 50;
+      noofwinners = 4;
+      minpercentage = 10;
       ticketprice = ethers.parseEther('0.1');
       htmlhash = ethers.encodeBytes32String('test');
       url = 'node101.io';
@@ -678,7 +679,7 @@ describe("CompanyLotteries", function () {
       // Buy a ticket
       await companyLotteries.connect(buyer).buyTicketTx(
         1, // lottery no
-        1, // quantity
+        2, // quantity
         '0x8ff97419363ffd7000167f130ef7168fbea05faf9251824ca5043f113cc6a7c7' // 101
       );
 
@@ -691,7 +692,7 @@ describe("CompanyLotteries", function () {
       // Buy a ticket
       await companyLotteries.connect(buyer2).buyTicketTx(
         1, // lottery no
-        1, // quantity
+        4, // quantity
         '0x26700e13983fefbd9cf16da2ed70fa5c6798ac55062a4803121a869731e308d2' // 100
       );
 
@@ -702,15 +703,15 @@ describe("CompanyLotteries", function () {
       await companyLotteries.connect(buyer).revealRndNumberTx(
         1, // lottery no
         1, // sticket no
-        1, // quantity
+        2, // quantity
         101 // random number
       );
 
       // Reveal the random number for the buyer2
       await companyLotteries.connect(buyer2).revealRndNumberTx(
         1, // lottery no
-        1, // sticket no
-        1, // quantity
+        3, // sticket no
+        4, // quantity
         100 // random number
       );
     });
@@ -722,29 +723,70 @@ describe("CompanyLotteries", function () {
 
     it('should return "Lottey does not exist!" if the lottery does not exist', async () => {
       await expect(
-        companyLotteries.checkIfMyTicketWon(
+        companyLotteries.connect(buyer).checkIfMyTicketWon(
           99, // Non-existent lottery ID
-          1 // sticket no
+          1 // ticket no
         )
-      )
-        .to.be.revertedWith('Lottery does not exist!');
+      ).to.be.revertedWith('Lottery does not exist!');
     });
 
     it('should return "Reveal phase has not ended yet!" if the reveal phase has not ended yet', async () => {
       await expect(
-        companyLotteries.checkIfMyTicketWon(
+        companyLotteries.connect(buyer).checkIfMyTicketWon(
           1, // lottery no
-          1 // sticket no
+          1 // ticket no
         )
-      )
-        .to.be.revertedWith('Reveal phase has not ended yet!');
+      ).to.be.revertedWith('Reveal phase has not ended yet!');
     });
 
-    it('should return "Ticket does not exist or is unowned!" if the ticket does not exist', async () => {});
+    it('should return "Ticket does not exist or is unowned!" if the ticket does not exist', async () => {
+      await ethers.provider.send('evm_increaseTime', [1801]); // 30 minutes later
+      await ethers.provider.send('evm_mine'); // Ensure time increment
 
-    it('should return "Ticket does not belong to the caller!" if the ticket does not belong to the caller', async () => {});
+      // Finalize the lottery
+      await companyLotteries.connect(owner).finalizeLottery(
+        1 // lottery no
+      );
 
-    it('should return true if the buyer has bought the winning ticket', async () => {});
+      await expect(
+        companyLotteries.connect(buyer).checkIfMyTicketWon(
+          1, // lottery no
+          10// ticket no
+        )
+      ).to.be.revertedWith('Ticket does not exist or is unowned!');
+    });
+
+    it('should return "Ticket does not belong to the caller!" if the ticket does not belong to the caller', async () => {
+      await ethers.provider.send('evm_increaseTime', [1801]); // 30 minutes later
+      await ethers.provider.send('evm_mine'); // Ensure time increment
+
+      // Finalize the lottery
+      await companyLotteries.connect(owner).finalizeLottery(
+        1 // lottery no
+      );
+
+      await expect(
+        companyLotteries.connect(buyer).checkIfMyTicketWon(
+          1, // lottery no
+          3 // ticket no
+        )
+      ).to.be.revertedWith('Ticket does not belong to the caller!');
+    });
+
+    it('should return boolean if the buyer has bought the winning ticket or not', async () => {
+      await ethers.provider.send('evm_increaseTime', [1801]); // 30 minutes later
+      await ethers.provider.send('evm_mine'); // Ensure time increment
+
+      // Finalize the lottery
+      await companyLotteries.connect(owner).finalizeLottery(
+        1 // lottery no
+      );
+
+      expect(await companyLotteries.connect(buyer).checkIfMyTicketWon(
+        1, // lottery no
+        1 // ticket no
+      )).to.be.a('boolean');
+    });
   });
 
   describe('checkIfAddressTicketWon', () => {
@@ -757,9 +799,9 @@ describe("CompanyLotteries", function () {
       const currentTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
 
       unixbeg = currentTimestamp + 3600; // 1 hour from the current block timestamp
-      nooftickets = 100;
-      noofwinners = 10;
-      minpercentage = 50;
+      nooftickets = 50;
+      noofwinners = 4;
+      minpercentage = 10;
       ticketprice = ethers.parseEther('0.1');
       htmlhash = ethers.encodeBytes32String('test');
       url = 'node101.io';
@@ -773,6 +815,51 @@ describe("CompanyLotteries", function () {
         ticketprice,
         htmlhash,
         url
+      );
+
+      // Approve tokens for the buyer
+      await myToken.connect(buyer).approve(
+        companyLotteries.getAddress(),
+        ethers.parseEther('1.0') // Approve more than enough
+      );
+
+      // Buy a ticket
+      await companyLotteries.connect(buyer).buyTicketTx(
+        1, // lottery no
+        2, // quantity
+        '0x8ff97419363ffd7000167f130ef7168fbea05faf9251824ca5043f113cc6a7c7' // 101
+      );
+
+      // Approve tokens for the buyer2
+      await myToken.connect(buyer2).approve(
+        companyLotteries.getAddress(),
+        ethers.parseEther('1.0') // Approve more than enough
+      );
+
+      // Buy a ticket
+      await companyLotteries.connect(buyer2).buyTicketTx(
+        1, // lottery no
+        4, // quantity
+        '0x26700e13983fefbd9cf16da2ed70fa5c6798ac55062a4803121a869731e308d2' // 100
+      );
+
+      await ethers.provider.send('evm_increaseTime', [1801]); // 30 minutes later
+      await ethers.provider.send('evm_mine'); // Ensure time increment
+
+      // Reveal the random number for the buyer
+      await companyLotteries.connect(buyer).revealRndNumberTx(
+        1, // lottery no
+        1, // sticket no
+        2, // quantity
+        101 // random number
+      );
+
+      // Reveal the random number for the buyer2
+      await companyLotteries.connect(buyer2).revealRndNumberTx(
+        1, // lottery no
+        3, // sticket no
+        4, // quantity
+        100 // random number
       );
     });
 
@@ -804,6 +891,69 @@ describe("CompanyLotteries", function () {
     });
 
     it('should return "Ticket does not exist or is unowned!" if the ticket does not exist', async () => {
+      await ethers.provider.send('evm_increaseTime', [1801]); // 30 minutes later
+      await ethers.provider.send('evm_mine'); // Ensure time increment
+
+      // Finalize the lottery
+      await companyLotteries.connect(owner).finalizeLottery(
+        1 // lottery no
+      );
+
+      await expect(
+        companyLotteries.checkIfAddressTicketWon(
+          buyer.address, // address
+          1, // lottery no
+          10// ticket no
+        )
+      )
+        .to.be.revertedWith('Ticket does not exist or is unowned!');
+    });
+
+    it('should return boolean if the buyer has bought the winning ticket or not', async () => {
+      await ethers.provider.send('evm_increaseTime', [1801]); // 30 minutes later
+      await ethers.provider.send('evm_mine'); // Ensure time increment
+
+      // Finalize the lottery
+      await companyLotteries.connect(owner).finalizeLottery(
+        1 // lottery no
+      );
+
+      expect(await companyLotteries.checkIfAddressTicketWon(
+        buyer.address, // address
+        1, // lottery no
+        1 // ticket no
+      )).to.be.a('boolean');
+    });
+  });
+
+  describe('getIthWinningTicket', () => {
+    let unixbeg, nooftickets, noofwinners, minpercentage, ticketprice, htmlhash, url;
+
+    beforeEach(async () => {
+      // Take a snapshot of the blockchain state
+      snapshotId = await ethers.provider.send('evm_snapshot', []);
+
+      const currentTimestamp = (await ethers.provider.getBlock('latest')).timestamp;
+
+      unixbeg = currentTimestamp + 3600; // 1 hour from the current block timestamp
+      nooftickets = 50;
+      noofwinners = 4;
+      minpercentage = 10;
+      ticketprice = ethers.parseEther('0.1');
+      htmlhash = ethers.encodeBytes32String('test');
+      url = 'node101.io';
+
+      // Create a lottery
+      await companyLotteries.connect(owner).createLottery(
+        unixbeg,
+        nooftickets,
+        noofwinners,
+        minpercentage,
+        ticketprice,
+        htmlhash,
+        url
+      );
+
       // Approve tokens for the buyer
       await myToken.connect(buyer).approve(
         companyLotteries.getAddress(),
@@ -813,23 +963,100 @@ describe("CompanyLotteries", function () {
       // Buy a ticket
       await companyLotteries.connect(buyer).buyTicketTx(
         1, // lottery no
-        1, // quantity
+        2, // quantity
         '0x8ff97419363ffd7000167f130ef7168fbea05faf9251824ca5043f113cc6a7c7' // 101
       );
 
-      await ethers.provider.send('evm_increaseTime', [3601]); // 1 hour later
+      // Approve tokens for the buyer2
+      await myToken.connect(buyer2).approve(
+        companyLotteries.getAddress(),
+        ethers.parseEther('1.0') // Approve more than enough
+      );
+
+      // Buy a ticket
+      await companyLotteries.connect(buyer2).buyTicketTx(
+        1, // lottery no
+        4, // quantity
+        '0x26700e13983fefbd9cf16da2ed70fa5c6798ac55062a4803121a869731e308d2' // 100
+      );
+
+      await ethers.provider.send('evm_increaseTime', [1801]); // 30 minutes later
       await ethers.provider.send('evm_mine'); // Ensure time increment
 
-      await expect(
-        companyLotteries.checkIfAddressTicketWon(
-          buyer.address, // address
-          1, // lottery no
-          2 // ticket no
-        )
-        ).to.be.revertedWith('Ticket does not exist or is unowned!');
+      // Reveal the random number for the buyer
+      await companyLotteries.connect(buyer).revealRndNumberTx(
+        1, // lottery no
+        1, // sticket no
+        2, // quantity
+        101 // random number
+      );
+
+      // Reveal the random number for the buyer2
+      await companyLotteries.connect(buyer2).revealRndNumberTx(
+        1, // lottery no
+        3, // sticket no
+        4, // quantity
+        100 // random number
+      );
     });
 
-    it('should return true if the buyer has bought the winning ticket', async () => {});
+    afterEach(async () => {
+      // Revert to the snapshot to reset the blockchain state
+      await ethers.provider.send('evm_revert', [snapshotId]);
+    });
+
+    it('should return "Lottey does not exist!" if the lottery does not exist', async () => {
+      await expect(
+        companyLotteries.getIthWinningTicket(
+          99, // Non-existent lottery ID
+          1 // ticket no
+        )
+      )
+        .to.be.revertedWith('Lottery does not exist!');
+    });
+
+    it('should return "Reveal phase has not ended yet!" if the reveal phase has not ended yet', async () => {
+      await expect(
+        companyLotteries.getIthWinningTicket(
+          1, // lottery no
+          1 // ticket no
+        )
+      )
+        .to.be.revertedWith('Reveal phase has not ended yet!');
+    });
+
+    it('should return "Index out of bounds!" if the ith ticket is greater than the total number of tickets bought', async () => {
+      await ethers.provider.send('evm_increaseTime', [1801]); // 30 minutes later
+      await ethers.provider.send('evm_mine'); // Ensure time increment
+
+      // Finalize the lottery
+      await companyLotteries.connect(owner).finalizeLottery(
+        1 // lottery no
+      );
+
+      await expect(
+        companyLotteries.getIthWinningTicket(
+          1, // lottery no
+          10// ticket no
+        )
+      )
+        .to.be.revertedWith('Index out of bounds!');
+    });
+
+    it('should return the winning ticket number for the given lottery and ticket no', async () => {
+      await ethers.provider.send('evm_increaseTime', [1801]); // 30 minutes later
+      await ethers.provider.send('evm_mine'); // Ensure time increment
+
+      // Finalize the lottery
+      await companyLotteries.connect(owner).finalizeLottery(
+        1 // lottery no
+      );
+
+      expect(await companyLotteries.getIthWinningTicket(
+        1, // lottery no
+        1 // ticket no
+      )).to.be.a('bigint'); // It returns 1n, 2n, 3n, 4n, etc.
+    });
   });
 
   describe('getCurrentLotteryNo', () => {

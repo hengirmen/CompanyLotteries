@@ -239,6 +239,7 @@ contract CompanyLotteries is Ownable {
     require(lottery.unixbeg != 0, "Lottery does not exist!");
     require(block.timestamp > lottery.unixreveal, "Reveal phase has not ended yet!");
     require(lottery.ticketOwner[ticket_no] != address(0), "Ticket does not exist or is unowned!");
+    require(lottery.ticketOwner[ticket_no] == msg.sender, "Ticket does not belong to the caller!");
 
     // Check if the ticket is in the winning tickets array
     for (uint i = 0; i < lottery.winningtickets.length; i++) {
@@ -272,6 +273,21 @@ contract CompanyLotteries is Ownable {
     }
 
     return false; // Ticket is not a winner
+  }
+
+  function getIthWinningTicket(
+    uint lottery_no,
+    uint i
+  ) public view returns (
+    uint ticketno
+  ) {
+    Lottery storage lottery = lotteries[lottery_no];
+
+    require(lottery.unixbeg != 0, "Lottery does not exist!");
+    require(block.timestamp > lottery.unixreveal, "Reveal phase has not ended yet!");
+    require(i < lottery.noofwinners, "Index out of bounds!");
+
+    return lottery.winningtickets[i - 1];
   }
 
   function getCurrentLotteryNo() public view returns (uint) {
