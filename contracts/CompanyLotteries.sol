@@ -100,6 +100,7 @@ contract CompanyLotteries is Ownable {
             block.timestamp > lottery.unixreveal,
             "Reveal phase has not ended yet!"
         );
+        require(lottery.isActive == false, "Lottery is not finalized or canceled!");
         require(
             lottery.ticketOwner[ticket_no] != address(0),
             "Ticket does not exist or is unowned!"
@@ -131,6 +132,7 @@ contract CompanyLotteries is Ownable {
             block.timestamp > lottery.unixreveal,
             "Reveal phase has not ended yet!"
         );
+        require(lottery.isActive == false, "Lottery is not finalized or canceled!");
         require(
             lottery.ticketOwner[ticket_no] != address(0),
             "Ticket does not exist or is unowned!"
@@ -161,6 +163,7 @@ contract CompanyLotteries is Ownable {
             block.timestamp > lottery.unixreveal,
             "Reveal phase has not ended yet!"
         );
+        require(lottery.isActive == false, "Lottery is not finalized or canceled!");
         require(i < lottery.noofwinners, "Index out of bounds!");
 
         return lottery.winningtickets[i - 1];
@@ -188,7 +191,7 @@ contract CompanyLotteries is Ownable {
 
         require(
             lottery.paymenttoken != erctokenaddress,
-            "Token address is the same as the current one!"
+            "Token is already set!"
         );
 
         lottery.paymenttoken = erctokenaddress;
@@ -230,7 +233,7 @@ contract CompanyLotteries is Ownable {
         );
         require(
             minpercentage > 0 && minpercentage <= 100,
-            "Minimum percentage must be greater than 0 and less than or equal to 100!"
+            "Minimum percentage must be greater than zero and less than or equal to 100!"
         );
         require(ticketprice > 0, "Ticket price must be greater than zero!");
 
@@ -277,7 +280,7 @@ contract CompanyLotteries is Ownable {
     ) public returns (uint sticketno) {
         require(
             hash_rnd_number != bytes32(0),
-            "Random number must not be zero!"
+            "Random hash must not be empty!"
         );
 
         Lottery storage lottery = lotteries[lottery_no];
@@ -294,7 +297,7 @@ contract CompanyLotteries is Ownable {
         );
         require(
             lottery.numsold + quantity <= lottery.nooftickets,
-            "Not enough tickets left!"
+            "Not enough tickets remaining!"
         );
 
         uint256 totalCost = quantity * lottery.ticketprice;
@@ -306,7 +309,7 @@ contract CompanyLotteries is Ownable {
         );
         require(
             transferSuccess,
-            "Payment failed. Ensure token approval and sufficient balance."
+            "ERC20: transfer amount exceeds balance"
         );
 
         // Assign tickets
